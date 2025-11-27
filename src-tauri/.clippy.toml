@@ -1,0 +1,3 @@
+# Clippy configuration for ResumeIDE
+msrv = "1.70"
+
