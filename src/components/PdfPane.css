@@ -1,0 +1,36 @@
+.pdf-pane {
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.pdf-viewer {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.pdf-empty-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+}
+
+.pdf-empty-icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.pdf-empty-text {
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.pdf-empty-hint {
+  font-size: 13px;
+}

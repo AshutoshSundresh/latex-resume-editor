@@ -1,0 +1,46 @@
+:root {
+  /* Dark theme colors - VS Code inspired */
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-toolbar: #2d2d2d;
+  --bg-statusbar: #007acc;
+  --border-color: #3c3c3c;
+  --text-primary: #d4d4d4;
+  --text-secondary: #9d9d9d;
+  --text-muted: #6d6d6d;
+  --accent-primary: #0e639c;
+  --accent-hover: #1177bb;
+  --accent-active: #094771;
+  --error: #f14c4c;
+  --warning: #cca700;
+  --success: #89d185;
+
+  /* Spacing */
+  --toolbar-height: 40px;
+  --statusbar-height: 24px;
+
+  /* Typography */
+  --font-ui: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}

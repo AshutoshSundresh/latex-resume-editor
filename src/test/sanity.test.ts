@@ -13,4 +13,3 @@ describe('Test Setup', () => {
     document.body.removeChild(div);
   });
 });
-

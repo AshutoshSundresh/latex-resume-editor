@@ -1,0 +1,44 @@
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--statusbar-height);
+  padding: 0 12px;
+  background-color: var(--bg-statusbar);
+  color: white;
+  font-size: 12px;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-building {
+  color: #ffe066;
+}
+
+.status-success {
+  color: #a3e635;
+}
+
+.status-error {
+  color: #fca5a5;
+}
+
+.status-item {
+  opacity: 0.9;
+}
+
+.status-position {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
