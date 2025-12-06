@@ -11,6 +11,7 @@ global.ResizeObserver = class ResizeObserver {
 // Mock Tauri API for tests
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(null),
+  convertFileSrc: vi.fn((path: string) => `asset://localhost/${path}`),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({

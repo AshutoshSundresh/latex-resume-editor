@@ -69,3 +69,28 @@ export async function getCurrentFile(): Promise<string | null> {
 export async function initWorkspace(): Promise<string> {
   return invoke<string>('workspace_init');
 }
+
+/**
+ * Result of a LaTeX compilation
+ */
+export interface BuildResult {
+  success: boolean;
+  pdf_path: string | null;
+  log: string;
+  duration_ms: number;
+  error_message: string | null;
+}
+
+/**
+ * Compile the current LaTeX file to PDF
+ */
+export async function compileLatex(): Promise<BuildResult> {
+  return invoke<BuildResult>('build_compile');
+}
+
+/**
+ * Check if tectonic is available on the system
+ */
+export async function checkTectonic(): Promise<boolean> {
+  return invoke<boolean>('build_check_tectonic');
+}

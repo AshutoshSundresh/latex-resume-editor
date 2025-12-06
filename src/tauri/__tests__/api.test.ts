@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { openFile, saveFile, saveFileAs, getCurrentFile, initWorkspace } from '../api';
+import {
+  openFile,
+  saveFile,
+  saveFileAs,
+  getCurrentFile,
+  initWorkspace,
+  compileLatex,
+  checkTectonic,
+} from '../api';
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 
@@ -107,6 +115,62 @@ describe('Tauri API', () => {
 
       expect(mockInvoke).toHaveBeenCalledWith('workspace_init');
       expect(result).toBe('C:\\Users\\user\\AppData\\Local\\ResumeIDE');
+    });
+  });
+
+  describe('compileLatex', () => {
+    it('should invoke build_compile and return BuildResult on success', async () => {
+      const mockBuildResult = {
+        success: true,
+        pdf_path: '/path/to/output.pdf',
+        log: 'Build successful',
+        duration_ms: 1500,
+        error_message: null,
+      };
+
+      mockInvoke.mockResolvedValue(mockBuildResult);
+
+      const result = await compileLatex();
+
+      expect(mockInvoke).toHaveBeenCalledWith('build_compile');
+      expect(result.success).toBe(true);
+      expect(result.pdf_path).toBe('/path/to/output.pdf');
+    });
+
+    it('should return error result when compilation fails', async () => {
+      const mockBuildResult = {
+        success: false,
+        pdf_path: null,
+        log: 'Error log',
+        duration_ms: 500,
+        error_message: 'Compilation failed',
+      };
+
+      mockInvoke.mockResolvedValue(mockBuildResult);
+
+      const result = await compileLatex();
+
+      expect(result.success).toBe(false);
+      expect(result.error_message).toBe('Compilation failed');
+    });
+  });
+
+  describe('checkTectonic', () => {
+    it('should return true when tectonic is available', async () => {
+      mockInvoke.mockResolvedValue(true);
+
+      const result = await checkTectonic();
+
+      expect(mockInvoke).toHaveBeenCalledWith('build_check_tectonic');
+      expect(result).toBe(true);
+    });
+
+    it('should return false when tectonic is not available', async () => {
+      mockInvoke.mockResolvedValue(false);
+
+      const result = await checkTectonic();
+
+      expect(result).toBe(false);
     });
   });
 });
