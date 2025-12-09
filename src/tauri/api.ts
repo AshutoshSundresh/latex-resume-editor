@@ -71,6 +71,22 @@ export async function initWorkspace(): Promise<string> {
 }
 
 /**
+ * Severity of a diagnostic message
+ */
+export type Severity = 'error' | 'warning' | 'info';
+
+/**
+ * A diagnostic message from the compiler
+ */
+export interface Diagnostic {
+  severity: Severity;
+  message: string;
+  file: string | null;
+  line: number | null;
+  column: number | null;
+}
+
+/**
  * Result of a LaTeX compilation
  */
 export interface BuildResult {
@@ -79,6 +95,7 @@ export interface BuildResult {
   log: string;
   duration_ms: number;
   error_message: string | null;
+  diagnostics: Diagnostic[];
 }
 
 /**

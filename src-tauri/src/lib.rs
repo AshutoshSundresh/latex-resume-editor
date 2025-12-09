@@ -1,4 +1,5 @@
 pub mod compiler;
+pub mod diagnostics;
 pub mod file_ops;
 pub mod workspace;
 
