@@ -11,27 +11,32 @@ describe('Toolbar', () => {
 
   it('should render Open button', () => {
     render(<Toolbar />);
-    expect(screen.getByRole('button', { name: /open/i })).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-open')).toBeInTheDocument();
   });
 
   it('should render Save button', () => {
     render(<Toolbar />);
-    expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-save')).toBeInTheDocument();
   });
 
   it('should render Save As button', () => {
     render(<Toolbar />);
-    expect(screen.getByRole('button', { name: /save as/i })).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-save-as')).toBeInTheDocument();
   });
 
   it('should render Compile button', () => {
     render(<Toolbar />);
-    expect(screen.getByRole('button', { name: /compile/i })).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-compile')).toBeInTheDocument();
   });
 
-  it('should render Settings button', () => {
+  it('should render Log button', () => {
     render(<Toolbar />);
-    expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-log')).toBeInTheDocument();
+  });
+
+  it('should render Help button', () => {
+    render(<Toolbar />);
+    expect(screen.getByTestId('toolbar-help')).toBeInTheDocument();
   });
 
   it('should call onOpen when Open button is clicked', async () => {
@@ -39,7 +44,7 @@ describe('Toolbar', () => {
     const onOpen = vi.fn();
     render(<Toolbar onOpen={onOpen} />);
 
-    await user.click(screen.getByRole('button', { name: /open/i }));
+    await user.click(screen.getByTestId('toolbar-open'));
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
@@ -48,7 +53,7 @@ describe('Toolbar', () => {
     const onSave = vi.fn();
     render(<Toolbar onSave={onSave} />);
 
-    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await user.click(screen.getByTestId('toolbar-save'));
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
@@ -57,7 +62,45 @@ describe('Toolbar', () => {
     const onCompile = vi.fn();
     render(<Toolbar onCompile={onCompile} />);
 
-    await user.click(screen.getByRole('button', { name: /compile/i }));
+    await user.click(screen.getByTestId('toolbar-compile'));
     expect(onCompile).toHaveBeenCalledTimes(1);
+  });
+
+  it('should call onToggleLog when Log button is clicked', async () => {
+    const user = userEvent.setup();
+    const onToggleLog = vi.fn();
+    render(<Toolbar onToggleLog={onToggleLog} />);
+
+    await user.click(screen.getByTestId('toolbar-log'));
+    expect(onToggleLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('should show active state when log is visible', () => {
+    render(<Toolbar logVisible={true} />);
+    expect(screen.getByTestId('toolbar-log')).toHaveClass('toolbar-btn-active');
+  });
+
+  it('should not show active state when log is hidden', () => {
+    render(<Toolbar logVisible={false} />);
+    expect(screen.getByTestId('toolbar-log')).not.toHaveClass('toolbar-btn-active');
+  });
+
+  it('should open help dialog when Help button is clicked', async () => {
+    const user = userEvent.setup();
+    render(<Toolbar />);
+
+    await user.click(screen.getByTestId('toolbar-help'));
+    expect(screen.getByTestId('help-dialog')).toBeInTheDocument();
+  });
+
+  it('should close help dialog when overlay is clicked', async () => {
+    const user = userEvent.setup();
+    render(<Toolbar />);
+
+    await user.click(screen.getByTestId('toolbar-help'));
+    expect(screen.getByTestId('help-dialog')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('help-dialog'));
+    expect(screen.queryByTestId('help-dialog')).not.toBeInTheDocument();
   });
 });

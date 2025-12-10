@@ -3073,14 +3073,17 @@ dependencies = [
 name = "resumeide"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "dirs 5.0.1",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

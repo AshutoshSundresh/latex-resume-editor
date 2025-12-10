@@ -71,22 +71,6 @@ export async function initWorkspace(): Promise<string> {
 }
 
 /**
- * Severity of a diagnostic message
- */
-export type Severity = 'error' | 'warning' | 'info';
-
-/**
- * A diagnostic message from the compiler
- */
-export interface Diagnostic {
-  severity: Severity;
-  message: string;
-  file: string | null;
-  line: number | null;
-  column: number | null;
-}
-
-/**
  * Result of a LaTeX compilation
  */
 export interface BuildResult {
@@ -95,7 +79,6 @@ export interface BuildResult {
   log: string;
   duration_ms: number;
   error_message: string | null;
-  diagnostics: Diagnostic[];
 }
 
 /**
@@ -106,8 +89,32 @@ export async function compileLatex(): Promise<BuildResult> {
 }
 
 /**
- * Check if tectonic is available on the system
+ * System requirements status
  */
-export async function checkTectonic(): Promise<boolean> {
-  return invoke<boolean>('build_check_tectonic');
+export interface RequirementsStatus {
+  pdflatex_available: boolean;
+  pdflatex_path: string | null;
+  all_satisfied: boolean;
+}
+
+/**
+ * Check system requirements (pdflatex, etc.)
+ */
+export async function checkRequirements(): Promise<RequirementsStatus> {
+  return invoke<RequirementsStatus>('check_system_requirements');
+}
+
+/**
+ * Debug pdflatex detection
+ */
+export async function debugPdflatex(): Promise<string> {
+  return invoke<string>('debug_pdflatex');
+}
+
+/**
+ * Read a PDF file and return it as a data URL
+ */
+export async function readPdfAsDataUrl(path: string): Promise<string> {
+  const base64 = await invoke<string>('read_pdf_base64', { path });
+  return `data:application/pdf;base64,${base64}`;
 }

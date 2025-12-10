@@ -1,0 +1,32 @@
+.compiler-log {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-background);
+  border-top: 1px solid var(--color-border);
+}
+
+.compiler-log-header {
+  padding: 8px 12px;
+  background-color: var(--color-toolbar-background);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--color-text);
+  opacity: 0.8;
+}
+
+.compiler-log-content {
+  flex: 1;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.8em;
+  line-height: 1.5;
+  color: var(--color-text);
+  opacity: 0.85;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+

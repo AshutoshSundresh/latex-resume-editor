@@ -1,25 +1,34 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Allotment } from 'allotment';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import 'allotment/dist/style.css';
 import './styles/theme.css';
 import './App.css';
 import { Toolbar } from './components/Toolbar';
-import { EditorPane, EditorPaneRef } from './components/EditorPane';
+import { EditorPane } from './components/EditorPane';
 import { PdfPane } from './components/PdfPane';
 import { StatusBar, BuildStatus } from './components/StatusBar';
-import { DiagnosticsPanel } from './components/DiagnosticsPanel';
+import { CompilerLog } from './components/CompilerLog';
+import { LandingPage } from './components/LandingPage';
 import {
   openFile,
   saveFile,
   saveFileAs,
   initWorkspace,
   compileLatex,
-  Diagnostic,
+  checkRequirements,
+  debugPdflatex,
+  readPdfAsDataUrl,
+  RequirementsStatus,
 } from './tauri/api';
-import { useAutosave } from './hooks/useAutosave';
 
 function App() {
+  // Landing page state
+  const [showLanding, setShowLanding] = useState(true);
+  const [requirements, setRequirements] = useState<RequirementsStatus | null>(null);
+  const [checkingRequirements, setCheckingRequirements] = useState(true);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Editor state
   const [content, setContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -27,33 +36,54 @@ function App() {
   const [buildStatus, setBuildStatus] = useState<BuildStatus>('idle');
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [isDirty, setIsDirty] = useState(false);
-  const [autosaveEnabled] = useState(true);
   const [pdfUrl, setPdfUrl] = useState<string | undefined>(undefined);
-  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [compilerLog, setCompilerLog] = useState('');
+  const [showLog, setShowLog] = useState(false);
 
-  const editorRef = useRef<EditorPaneRef | null>(null);
 
-  // Initialize workspace on mount
+  // Check requirements and initialize workspace on mount
   useEffect(() => {
-    initWorkspace().catch(console.error);
+    const init = async () => {
+      try {
+        await initWorkspace();
+        const status = await checkRequirements();
+        setRequirements(status);
+
+        // Get debug info
+        const debug = await debugPdflatex();
+        setDebugInfo(debug);
+
+        // If all requirements are satisfied, skip landing page
+        if (status.all_satisfied) {
+          setShowLanding(false);
+        }
+      } catch (error) {
+        console.error('Failed to initialize:', error);
+      } finally {
+        setCheckingRequirements(false);
+      }
+    };
+    init();
   }, []);
 
-  // Autosave hook
-  const handleAutosave = useCallback(async () => {
-    if (filePath) {
-      await saveFile(content);
-      setOriginalContent(content);
+  const handleRecheck = useCallback(async () => {
+    setCheckingRequirements(true);
+    try {
+      const status = await checkRequirements();
+      setRequirements(status);
+      if (status.all_satisfied) {
+        setShowLanding(false);
+      }
+    } catch (error) {
+      console.error('Failed to check requirements:', error);
+    } finally {
+      setCheckingRequirements(false);
     }
-  }, [filePath, content]);
+  }, []);
 
-  useAutosave({
-    content,
-    filePath,
-    onSave: handleAutosave,
-    delay: 1000,
-    enabled: autosaveEnabled,
-  });
+  const handleContinue = useCallback(() => {
+    setShowLanding(false);
+  }, []);
 
   // Track dirty state
   useEffect(() => {
@@ -76,11 +106,10 @@ function App() {
         setOriginalContent(fileInfo.content);
         setFilePath(fileInfo.path);
         setFileName(fileInfo.name);
-        // Clear PDF and diagnostics when opening new file
+        // Clear PDF and log when opening new file
         setPdfUrl(undefined);
         setBuildStatus('idle');
-        setDiagnostics([]);
-        setShowDiagnostics(false);
+        setCompilerLog('');
       }
     } catch (error) {
       console.error('Failed to open file:', error);
@@ -106,7 +135,6 @@ function App() {
         await saveFile(content);
         setOriginalContent(content);
       } else {
-        // No file open, use Save As
         await handleSaveAs();
       }
     } catch (error) {
@@ -126,45 +154,59 @@ function App() {
       setOriginalContent(content);
 
       setBuildStatus('building');
-      setDiagnostics([]);
+      setCompilerLog('Compiling...');
 
       const result = await compileLatex();
 
-      // Store diagnostics
-      setDiagnostics(result.diagnostics);
-
-      // Show diagnostics panel if there are any issues
-      if (result.diagnostics.length > 0) {
-        setShowDiagnostics(true);
-      }
+      // Store the raw log
+      setCompilerLog(result.log || result.error_message || 'No output');
 
       if (result.success && result.pdf_path) {
         setBuildStatus('success');
-        // Convert file path to URL for iframe with cache-busting
-        const url = convertFileSrc(result.pdf_path) + `?t=${Date.now()}`;
-        setPdfUrl(url);
+        try {
+          const dataUrl = await readPdfAsDataUrl(result.pdf_path);
+          setPdfUrl(dataUrl);
+        } catch (e) {
+          console.error('Failed to read PDF:', e);
+          setCompilerLog((prev) => prev + '\n\nFailed to load PDF preview.');
+        }
       } else {
         setBuildStatus('error');
-        console.error('Compilation failed:', result.error_message);
+        setShowLog(true); // Show log on error
       }
     } catch (error) {
       setBuildStatus('error');
-      console.error('Compile error:', error);
+      setCompilerLog(`Compile error: ${error}`);
+      setShowLog(true);
     }
   }, [filePath, content]);
 
-  const handleDiagnosticClick = useCallback((diagnostic: Diagnostic) => {
-    if (diagnostic.line && editorRef.current) {
-      editorRef.current.jumpToLine(diagnostic.line);
-    }
-  }, []);
-
-  const handleSettings = useCallback(() => {
-    // Toggle diagnostics panel for now
-    setShowDiagnostics((prev) => !prev);
+  const handleToggleLog = useCallback(() => {
+    setShowLog((prev) => !prev);
   }, []);
 
   const displayFileName = isDirty ? `${fileName} •` : fileName;
+
+  // Show loading state while checking requirements
+  if (checkingRequirements) {
+    return (
+      <div className="app-container loading" data-testid="app-loading">
+        <div className="loading-spinner">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show landing page if requirements not satisfied or first launch
+  if (showLanding && requirements) {
+    return (
+      <LandingPage
+        requirements={requirements}
+        onContinue={handleContinue}
+        onRecheck={handleRecheck}
+        debugInfo={debugInfo}
+      />
+    );
+  }
 
   return (
     <div className="app-container" data-testid="app-container">
@@ -173,7 +215,8 @@ function App() {
         onSave={handleSave}
         onSaveAs={handleSaveAs}
         onCompile={handleCompile}
-        onSettings={handleSettings}
+        onToggleLog={handleToggleLog}
+        logVisible={showLog}
       />
       <div className="main-content">
         <Allotment>
@@ -181,18 +224,14 @@ function App() {
             <Allotment vertical>
               <Allotment.Pane minSize={200}>
                 <EditorPane
-                  ref={editorRef}
                   content={content}
                   onChange={handleContentChange}
                   onCursorChange={handleCursorChange}
                 />
               </Allotment.Pane>
-              {showDiagnostics && (
-                <Allotment.Pane minSize={100} preferredSize={150}>
-                  <DiagnosticsPanel
-                    diagnostics={diagnostics}
-                    onDiagnosticClick={handleDiagnosticClick}
-                  />
+              {showLog && (
+                <Allotment.Pane minSize={80} preferredSize={150}>
+                  <CompilerLog log={compilerLog} visible={true} />
                 </Allotment.Pane>
               )}
             </Allotment>
