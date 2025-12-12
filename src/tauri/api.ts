@@ -26,7 +26,8 @@ export async function openFile(): Promise<FileInfo | null> {
     return null;
   }
 
-  const path = typeof selected === 'string' ? selected : selected.path;
+  // Handle both string and FilePath object types
+  const path = typeof selected === 'string' ? selected : (selected as { path: string }).path;
   return invoke<FileInfo>('file_open', { path });
 }
 
