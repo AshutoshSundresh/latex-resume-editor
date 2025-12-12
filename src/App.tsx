@@ -1,5 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Allotment } from 'allotment';
+import toast from 'react-hot-toast';
+import { ask } from '@tauri-apps/plugin-dialog';
+import jakesResumeTemplate from './templates/jakes-resume.tex?raw';
 import 'allotment/dist/style.css';
 import './styles/theme.css';
 import './App.css';
@@ -9,6 +12,7 @@ import { PdfPane } from './components/PdfPane';
 import { StatusBar, BuildStatus } from './components/StatusBar';
 import { CompilerLog } from './components/CompilerLog';
 import { LandingPage } from './components/LandingPage';
+import { StartupDialog } from './components/StartupDialog';
 import {
   openFile,
   saveFile,
@@ -27,6 +31,7 @@ function App() {
   const [requirements, setRequirements] = useState<RequirementsStatus | null>(null);
   const [checkingRequirements, setCheckingRequirements] = useState(true);
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [showStartupDialog, setShowStartupDialog] = useState(false);
 
   // Editor state
   const [content, setContent] = useState('');
@@ -39,6 +44,7 @@ function App() {
   const [pdfUrl, setPdfUrl] = useState<string | undefined>(undefined);
   const [compilerLog, setCompilerLog] = useState('');
   const [showLog, setShowLog] = useState(false);
+  const isDirtyRef = useRef(false);
 
 
   // Check requirements and initialize workspace on mount
@@ -53,9 +59,10 @@ function App() {
         const debug = await debugPdflatex();
         setDebugInfo(debug);
 
-        // If all requirements are satisfied, skip landing page
+        // If all requirements are satisfied, skip landing page and show startup dialog
         if (status.all_satisfied) {
           setShowLanding(false);
+          setShowStartupDialog(true);
         }
       } catch (error) {
         console.error('Failed to initialize:', error);
@@ -83,11 +90,15 @@ function App() {
 
   const handleContinue = useCallback(() => {
     setShowLanding(false);
+    // Show startup dialog when continuing from landing page
+    setShowStartupDialog(true);
   }, []);
 
   // Track dirty state
   useEffect(() => {
-    setIsDirty(content !== originalContent);
+    const dirty = content !== originalContent;
+    setIsDirty(dirty);
+    isDirtyRef.current = dirty;
   }, [content, originalContent]);
 
   const handleContentChange = useCallback((value: string | undefined) => {
@@ -99,6 +110,23 @@ function App() {
   }, []);
 
   const handleOpen = useCallback(async () => {
+    // Check for unsaved changes before opening a new file
+    if (isDirtyRef.current) {
+      const shouldProceed = await ask(
+        'You have unsaved changes. Do you want to discard them and open a new file?',
+        {
+          title: 'Unsaved Changes',
+          kind: 'warning',
+          okLabel: 'Discard Changes',
+          cancelLabel: 'Cancel',
+        }
+      );
+
+      if (!shouldProceed) {
+        return; // User cancelled, don't open new file
+      }
+    }
+
     try {
       const fileInfo = await openFile();
       if (fileInfo) {
@@ -110,10 +138,26 @@ function App() {
         setPdfUrl(undefined);
         setBuildStatus('idle');
         setCompilerLog('');
+        setShowStartupDialog(false);
+        toast.success(`Opened ${fileInfo.name}`);
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to open file';
+      toast.error(errorMessage);
       console.error('Failed to open file:', error);
     }
+  }, []);
+
+  const handleLoadTemplate = useCallback(() => {
+    setContent(jakesResumeTemplate);
+    setOriginalContent(jakesResumeTemplate);
+    setFilePath(null);
+    setShowStartupDialog(false);
+    toast.success('Loaded Jake\'s Resume Template');
+  }, []);
+
+  const handleBlankFile = useCallback(() => {
+    setShowStartupDialog(false);
   }, []);
 
   const handleSaveAs = useCallback(async () => {
@@ -123,8 +167,11 @@ function App() {
         setOriginalContent(fileInfo.content);
         setFilePath(fileInfo.path);
         setFileName(fileInfo.name);
+        toast.success(`Saved as ${fileInfo.name}`);
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save file';
+      toast.error(errorMessage);
       console.error('Failed to save file:', error);
     }
   }, [content]);
@@ -134,17 +181,20 @@ function App() {
       if (filePath) {
         await saveFile(content);
         setOriginalContent(content);
+        toast.success('File saved');
       } else {
         await handleSaveAs();
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save file';
+      toast.error(errorMessage);
       console.error('Failed to save file:', error);
     }
   }, [filePath, content, handleSaveAs]);
 
   const handleCompile = useCallback(async () => {
     if (!filePath) {
-      console.error('No file open to compile');
+      toast.error('No file open to compile (did you save the file yet?)');
       return;
     }
 
@@ -155,27 +205,36 @@ function App() {
 
       setBuildStatus('building');
       setCompilerLog('Compiling...');
+      const loadingToast = toast.loading('Compiling LaTeX...');
 
       const result = await compileLatex();
+      toast.dismiss(loadingToast);
 
       // Store the raw log
       setCompilerLog(result.log || result.error_message || 'No output');
 
       if (result.success && result.pdf_path) {
         setBuildStatus('success');
+        toast.success('Compilation successful!');
         try {
           const dataUrl = await readPdfAsDataUrl(result.pdf_path);
           setPdfUrl(dataUrl);
         } catch (e) {
-          console.error('Failed to read PDF:', e);
+          const errorMessage = e instanceof Error ? e.message : 'Failed to read PDF';
+          toast.error(`Compilation succeeded but failed to load PDF: ${errorMessage}`);
           setCompilerLog((prev) => prev + '\n\nFailed to load PDF preview.');
+          console.error('Failed to read PDF:', e);
         }
       } else {
         setBuildStatus('error');
+        const errorMsg = result.error_message || 'Compilation failed. Check the compiler log for details.';
+        toast.error(errorMsg);
         setShowLog(true); // Show log on error
       }
     } catch (error) {
       setBuildStatus('error');
+      const errorMessage = error instanceof Error ? error.message : 'Compilation error occurred';
+      toast.error(errorMessage);
       setCompilerLog(`Compile error: ${error}`);
       setShowLog(true);
     }
@@ -198,13 +257,18 @@ function App() {
         e.preventDefault();
         handleOpen();
       }
+      // Ctrl+B or Cmd+B: Compile
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        handleCompile();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleSave, handleOpen]);
+  }, [handleSave, handleOpen, handleCompile]);
 
   const displayFileName = isDirty ? `${fileName} •` : fileName;
 
@@ -231,6 +295,13 @@ function App() {
 
   return (
     <div className="app-container" data-testid="app-container">
+      {showStartupDialog && (
+        <StartupDialog
+          onBlankFile={handleBlankFile}
+          onOpenFile={handleOpen}
+          onLoadTemplate={handleLoadTemplate}
+        />
+      )}
       <Toolbar
         onOpen={handleOpen}
         onSave={handleSave}
