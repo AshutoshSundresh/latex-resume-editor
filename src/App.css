@@ -1,3 +1,17 @@
+.app-container.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--color-background);
+}
+
+.loading-spinner {
+  font-size: 1.2em;
+  color: var(--color-text);
+  opacity: 0.7;
+}
+
 .app-container {
   display: flex;
   flex-direction: column;

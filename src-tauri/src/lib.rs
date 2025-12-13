@@ -1,5 +1,4 @@
 pub mod compiler;
-pub mod diagnostics;
 pub mod file_ops;
 pub mod workspace;
 
@@ -7,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
 
-use compiler::{compile_latex, is_tectonic_available, BuildResult};
+use compiler::{check_requirements, compile_latex_async, BuildResult, RequirementsStatus};
 use file_ops::{get_file_name, read_file, write_file};
 use workspace::init_workspace;
 
@@ -80,22 +79,58 @@ fn file_get_current(state: State<AppState>) -> Option<String> {
 
 /// Compile the current LaTeX file to PDF
 #[tauri::command]
-fn build_compile(state: State<AppState>) -> Result<BuildResult, String> {
-    let current = state.current_file.lock().map_err(|e| e.to_string())?;
-    let tex_path = current.as_ref().ok_or("No file is currently open")?;
+async fn build_compile(state: State<'_, AppState>) -> Result<BuildResult, String> {
+    let tex_path = {
+        let current = state.current_file.lock().map_err(|e| e.to_string())?;
+        current.as_ref().ok_or("No file is currently open")?.clone()
+    };
 
     // Use the same directory as the tex file for output
     let output_dir = tex_path
         .parent()
-        .ok_or("Cannot determine output directory")?;
+        .ok_or("Cannot determine output directory")?
+        .to_path_buf();
 
-    Ok(compile_latex(tex_path, output_dir))
+    Ok(compile_latex_async(&tex_path, &output_dir).await)
 }
 
-/// Check if tectonic compiler is available
+/// Check system requirements (pdflatex, etc.)
 #[tauri::command]
-fn build_check_tectonic() -> bool {
-    is_tectonic_available()
+fn check_system_requirements() -> RequirementsStatus {
+    check_requirements()
+}
+
+/// Read a PDF file and return it as base64
+#[tauri::command]
+fn read_pdf_base64(path: String) -> Result<String, String> {
+    use std::fs;
+    use std::io::Read;
+    
+    let mut file = fs::File::open(&path)
+        .map_err(|e| format!("Failed to open PDF: {}", e))?;
+    
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .map_err(|e| format!("Failed to read PDF: {}", e))?;
+    
+    use base64::Engine;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&buffer))
+}
+
+/// Debug command to check pdflatex paths
+#[tauri::command]
+fn debug_pdflatex() -> String {
+    let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "NOT_FOUND".to_string());
+    let path1 = format!(
+        "{}\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64\\pdflatex.exe",
+        home
+    );
+    let exists1 = std::path::Path::new(&path1).exists();
+    
+    format!(
+        "USERPROFILE: {}\nPath: {}\nExists: {}",
+        home, path1, exists1
+    )
 }
 
 /// File information returned from file operations
@@ -111,6 +146,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             current_file: Mutex::new(None),
         })
@@ -121,7 +157,9 @@ pub fn run() {
             file_save_as,
             file_get_current,
             build_compile,
-            build_check_tectonic
+            check_system_requirements,
+            debug_pdflatex,
+            read_pdf_base64
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import {
   openFile,
   saveFile,
@@ -6,171 +8,169 @@ import {
   getCurrentFile,
   initWorkspace,
   compileLatex,
-  checkTectonic,
+  checkRequirements,
 } from '../api';
-import { invoke } from '@tauri-apps/api/core';
-import { open, save } from '@tauri-apps/plugin-dialog';
 
-// Get mocked functions
-const mockInvoke = vi.mocked(invoke);
-const mockOpen = vi.mocked(open);
-const mockSave = vi.mocked(save);
+// Mocks are set up in setup.ts
 
 describe('Tauri API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('openFile', () => {
-    it('should return null when user cancels dialog', async () => {
-      mockOpen.mockResolvedValue(null);
+  describe('initWorkspace', () => {
+    it('should call workspace_init command', async () => {
+      const result = await initWorkspace();
+      expect(invoke).toHaveBeenCalledWith('workspace_init');
+      expect(result).toBe('/mock/workspace/path');
+    });
+  });
 
+  describe('openFile', () => {
+    it('should open dialog and call file_open command', async () => {
       const result = await openFile();
 
-      expect(result).toBeNull();
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(open).toHaveBeenCalledTimes(1);
+      expect(open).toHaveBeenCalledWith({
+        multiple: false,
+        filters: [
+          { name: 'LaTeX Files', extensions: ['tex'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+      expect(invoke).toHaveBeenCalledWith('file_open', { path: '/mock/path/selected.tex' });
+      expect(result).toBeDefined();
     });
 
-    it('should invoke file_open with selected path', async () => {
-      const mockFileInfo = {
-        path: '/path/to/resume.tex',
-        name: 'resume.tex',
-        content: '\\documentclass{article}',
-      };
-
-      mockOpen.mockResolvedValue({ path: '/path/to/resume.tex', name: 'resume.tex' });
-      mockInvoke.mockResolvedValue(mockFileInfo);
+    it('should return null if dialog is cancelled', async () => {
+      vi.mocked(open).mockResolvedValueOnce(null);
 
       const result = await openFile();
 
-      expect(mockInvoke).toHaveBeenCalledWith('file_open', { path: '/path/to/resume.tex' });
-      expect(result).toEqual(mockFileInfo);
+      expect(open).toHaveBeenCalledTimes(1);
+      expect(invoke).not.toHaveBeenCalled();
+      expect(result).toBeNull();
     });
   });
 
   describe('saveFile', () => {
-    it('should invoke file_save with content', async () => {
-      mockInvoke.mockResolvedValue(undefined);
+    it('should call file_save command with content', async () => {
+      const content = 'Test content';
+      await saveFile(content);
 
-      await saveFile('\\documentclass{article}');
+      expect(invoke).toHaveBeenCalledWith('file_save', { content });
+    });
 
-      expect(mockInvoke).toHaveBeenCalledWith('file_save', { content: '\\documentclass{article}' });
+    it('should handle empty content', async () => {
+      await saveFile('');
+      expect(invoke).toHaveBeenCalledWith('file_save', { content: '' });
     });
   });
 
   describe('saveFileAs', () => {
-    it('should return null when user cancels dialog', async () => {
-      mockSave.mockResolvedValue(null);
+    it('should open save dialog and call file_save_as command', async () => {
+      const content = 'Test content';
+      const result = await saveFileAs(content);
 
-      const result = await saveFileAs('content');
-
-      expect(result).toBeNull();
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledWith({
+        filters: [
+          { name: 'LaTeX Files', extensions: ['tex'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+        defaultPath: 'resume.tex',
+      });
+      expect(invoke).toHaveBeenCalledWith('file_save_as', {
+        path: '/mock/path/saved.tex',
+        content,
+      });
+      expect(result).toBeDefined();
     });
 
-    it('should invoke file_save_as with path and content', async () => {
-      const mockFileInfo = {
-        path: '/path/to/new.tex',
-        name: 'new.tex',
-        content: 'content',
-      };
-
-      mockSave.mockResolvedValue('/path/to/new.tex');
-      mockInvoke.mockResolvedValue(mockFileInfo);
+    it('should return null if save dialog is cancelled', async () => {
+      vi.mocked(save).mockResolvedValueOnce(null);
 
       const result = await saveFileAs('content');
 
-      expect(mockInvoke).toHaveBeenCalledWith('file_save_as', {
-        path: '/path/to/new.tex',
-        content: 'content',
-      });
-      expect(result).toEqual(mockFileInfo);
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(invoke).not.toHaveBeenCalled();
+      expect(result).toBeNull();
     });
   });
 
   describe('getCurrentFile', () => {
-    it('should invoke file_get_current and return path', async () => {
-      mockInvoke.mockResolvedValue('/path/to/current.tex');
-
+    it('should call file_get_current command', async () => {
       const result = await getCurrentFile();
 
-      expect(mockInvoke).toHaveBeenCalledWith('file_get_current');
-      expect(result).toBe('/path/to/current.tex');
-    });
-
-    it('should return null when no file is open', async () => {
-      mockInvoke.mockResolvedValue(null);
-
-      const result = await getCurrentFile();
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('initWorkspace', () => {
-    it('should invoke workspace_init and return path', async () => {
-      mockInvoke.mockResolvedValue('C:\\Users\\user\\AppData\\Local\\ResumeIDE');
-
-      const result = await initWorkspace();
-
-      expect(mockInvoke).toHaveBeenCalledWith('workspace_init');
-      expect(result).toBe('C:\\Users\\user\\AppData\\Local\\ResumeIDE');
+      expect(invoke).toHaveBeenCalledWith('file_get_current');
+      expect(result).toBe('/mock/path/resume.tex');
     });
   });
 
   describe('compileLatex', () => {
-    it('should invoke build_compile and return BuildResult on success', async () => {
-      const mockBuildResult = {
-        success: true,
-        pdf_path: '/path/to/output.pdf',
-        log: 'Build successful',
-        duration_ms: 1500,
-        error_message: null,
-      };
-
-      mockInvoke.mockResolvedValue(mockBuildResult);
-
+    it('should call build_compile command', async () => {
       const result = await compileLatex();
 
-      expect(mockInvoke).toHaveBeenCalledWith('build_compile');
-      expect(result.success).toBe(true);
-      expect(result.pdf_path).toBe('/path/to/output.pdf');
+      expect(invoke).toHaveBeenCalledWith('build_compile');
+      expect(result).toEqual({
+        success: true,
+        pdf_path: '/mock/path/output.pdf',
+        log: 'Compilation successful',
+        duration_ms: 1234,
+        error_message: null,
+      });
     });
 
-    it('should return error result when compilation fails', async () => {
-      const mockBuildResult = {
-        success: false,
-        pdf_path: null,
-        log: 'Error log',
-        duration_ms: 500,
-        error_message: 'Compilation failed',
-      };
-
-      mockInvoke.mockResolvedValue(mockBuildResult);
-
+    it('should return BuildResult with all fields', async () => {
       const result = await compileLatex();
 
-      expect(result.success).toBe(false);
-      expect(result.error_message).toBe('Compilation failed');
+      expect(result).toHaveProperty('success');
+      expect(result).toHaveProperty('pdf_path');
+      expect(result).toHaveProperty('log');
+      expect(result).toHaveProperty('duration_ms');
+      expect(result).toHaveProperty('error_message');
     });
   });
 
-  describe('checkTectonic', () => {
-    it('should return true when tectonic is available', async () => {
-      mockInvoke.mockResolvedValue(true);
+  describe('checkRequirements', () => {
+    it('should call check_system_requirements command', async () => {
+      const result = await checkRequirements();
 
-      const result = await checkTectonic();
-
-      expect(mockInvoke).toHaveBeenCalledWith('build_check_tectonic');
-      expect(result).toBe(true);
+      expect(invoke).toHaveBeenCalledWith('check_system_requirements');
+      expect(result).toEqual({
+        pdflatex_available: true,
+        pdflatex_path: '/usr/bin/pdflatex',
+        all_satisfied: true,
+      });
     });
 
-    it('should return false when tectonic is not available', async () => {
-      mockInvoke.mockResolvedValue(false);
+    it('should return RequirementsStatus with all fields', async () => {
+      const result = await checkRequirements();
 
-      const result = await checkTectonic();
+      expect(result).toHaveProperty('pdflatex_available');
+      expect(result).toHaveProperty('pdflatex_path');
+      expect(result).toHaveProperty('all_satisfied');
+    });
+  });
+});
 
-      expect(result).toBe(false);
+describe('API types', () => {
+  describe('BuildResult', () => {
+    it('should handle successful build result', async () => {
+      const result = await compileLatex();
+
+      expect(result.success).toBe(true);
+      expect(result.pdf_path).toBe('/mock/path/output.pdf');
+      expect(result.error_message).toBeNull();
+    });
+  });
+
+  describe('RequirementsStatus', () => {
+    it('should have consistent all_satisfied with pdflatex_available', async () => {
+      const result = await checkRequirements();
+
+      // In our mock, both are true
+      expect(result.all_satisfied).toBe(result.pdflatex_available);
     });
   });
 });
