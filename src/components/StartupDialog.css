@@ -1,0 +1,90 @@
+.startup-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.startup-dialog {
+  background: var(--bg-toolbar);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+}
+
+.startup-dialog-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.startup-dialog-header h2 {
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.startup-dialog-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.startup-dialog-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.startup-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.startup-option:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.startup-option:active {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.startup-option-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.startup-option-content {
+  flex: 1;
+}
+
+.startup-option-content h3 {
+  margin: 0 0 2px 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.startup-option-content p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+

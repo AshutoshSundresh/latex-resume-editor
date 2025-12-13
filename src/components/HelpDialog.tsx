@@ -36,6 +36,10 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
                 <kbd>Ctrl</kbd> + <kbd>O</kbd>
                 <span>Open file</span>
               </div>
+              <div className="shortcut-row">
+                <kbd>Ctrl</kbd> + <kbd>B</kbd>
+                <span>Compile LaTeX</span>
+              </div>
             </div>
           </section>
 
