@@ -15,7 +15,7 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
           </button>
         </div>
         <div className="help-content">
-          <p className="help-version">Version 0.1.0</p>
+          <p className="help-version">Version 1.0.0</p>
 
           <section className="help-section">
             <h3>About</h3>
