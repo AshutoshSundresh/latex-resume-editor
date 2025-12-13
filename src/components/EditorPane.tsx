@@ -1,22 +1,50 @@
+import Editor from '@monaco-editor/react';
 import './EditorPane.css';
 
 interface EditorPaneProps {
   content?: string;
   onChange?: (value: string | undefined) => void;
+  onCursorChange?: (line: number, column: number) => void;
 }
 
-export function EditorPane({ content = '', onChange }: EditorPaneProps) {
+export function EditorPane({ content = '', onChange, onCursorChange }: EditorPaneProps) {
+  const handleEditorMount = (editor: unknown) => {
+    const monacoEditor = editor as {
+      onDidChangeCursorPosition: (
+        cb: (e: { position: { lineNumber: number; column: number } }) => void
+      ) => void;
+    };
+
+    monacoEditor.onDidChangeCursorPosition((e) => {
+      onCursorChange?.(e.position.lineNumber, e.position.column);
+    });
+  };
+
   return (
     <div className="editor-pane" data-testid="editor-pane">
-      <div className="editor-placeholder">
-        {/* Monaco editor will be added here */}
-        <textarea
-          className="editor-textarea"
-          value={content}
-          onChange={(e) => onChange?.(e.target.value)}
-          placeholder="LaTeX editor - Monaco will be integrated here"
-        />
-      </div>
+      <Editor
+        height="100%"
+        defaultLanguage="latex"
+        language="latex"
+        theme="vs-dark"
+        value={content}
+        onChange={onChange}
+        onMount={handleEditorMount}
+        data-testid="monaco-editor-mock"
+        options={{
+          fontSize: 14,
+          fontFamily: "'Cascadia Code', 'JetBrains Mono', Consolas, monospace",
+          lineNumbers: 'on',
+          minimap: { enabled: true },
+          wordWrap: 'on',
+          automaticLayout: true,
+          scrollBeyondLastLine: false,
+          padding: { top: 12 },
+          renderWhitespace: 'selection',
+          bracketPairColorization: { enabled: true },
+          tabSize: 2,
+        }}
+      />
     </div>
   );
 }
