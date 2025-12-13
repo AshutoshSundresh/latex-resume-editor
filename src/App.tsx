@@ -8,6 +8,7 @@ import { EditorPane } from './components/EditorPane';
 import { PdfPane } from './components/PdfPane';
 import { StatusBar, BuildStatus } from './components/StatusBar';
 import { openFile, saveFile, saveFileAs, initWorkspace } from './tauri/api';
+import { useAutosave } from './hooks/useAutosave';
 
 function App() {
   const [content, setContent] = useState('');
@@ -17,11 +18,28 @@ function App() {
   const [buildStatus] = useState<BuildStatus>('idle');
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [isDirty, setIsDirty] = useState(false);
+  const [autosaveEnabled] = useState(true);
 
   // Initialize workspace on mount
   useEffect(() => {
     initWorkspace().catch(console.error);
   }, []);
+
+  // Autosave hook
+  const handleAutosave = useCallback(async () => {
+    if (filePath) {
+      await saveFile(content);
+      setOriginalContent(content);
+    }
+  }, [filePath, content]);
+
+  useAutosave({
+    content,
+    filePath,
+    onSave: handleAutosave,
+    delay: 1000,
+    enabled: autosaveEnabled,
+  });
 
   // Track dirty state
   useEffect(() => {
@@ -50,20 +68,6 @@ function App() {
     }
   }, []);
 
-  const handleSave = useCallback(async () => {
-    try {
-      if (filePath) {
-        await saveFile(content);
-        setOriginalContent(content);
-      } else {
-        // No file open, use Save As
-        await handleSaveAs();
-      }
-    } catch (error) {
-      console.error('Failed to save file:', error);
-    }
-  }, [filePath, content]);
-
   const handleSaveAs = useCallback(async () => {
     try {
       const fileInfo = await saveFileAs(content);
@@ -76,6 +80,20 @@ function App() {
       console.error('Failed to save file:', error);
     }
   }, [content]);
+
+  const handleSave = useCallback(async () => {
+    try {
+      if (filePath) {
+        await saveFile(content);
+        setOriginalContent(content);
+      } else {
+        // No file open, use Save As
+        await handleSaveAs();
+      }
+    } catch (error) {
+      console.error('Failed to save file:', error);
+    }
+  }, [filePath, content, handleSaveAs]);
 
   const handleCompile = useCallback(() => {
     // TODO: Implement compile functionality
