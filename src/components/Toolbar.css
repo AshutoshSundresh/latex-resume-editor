@@ -1,0 +1,49 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: var(--toolbar-height);
+  padding: 0 12px;
+  background-color: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 4px;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.toolbar-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-btn:active {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.toolbar-btn-primary {
+  background-color: var(--accent-primary);
+}
+
+.toolbar-btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.toolbar-btn-primary:active {
+  background-color: var(--accent-active);
+}

@@ -1,50 +1,42 @@
 import { useState } from 'react';
-import reactLogo from './assets/react.svg';
-import { invoke } from '@tauri-apps/api/core';
+import { Allotment } from 'allotment';
+import 'allotment/dist/style.css';
+import './styles/theme.css';
 import './App.css';
+import { Toolbar } from './components/Toolbar';
+import { EditorPane } from './components/EditorPane';
+import { PdfPane } from './components/PdfPane';
+import { StatusBar, BuildStatus } from './components/StatusBar';
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState('');
-  const [name, setName] = useState('');
+  const [content, setContent] = useState('');
+  const [buildStatus] = useState<BuildStatus>('idle');
+  const [cursorPosition] = useState({ line: 1, column: 1 });
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke('greet', { name }));
-  }
+  const handleContentChange = (value: string | undefined) => {
+    setContent(value || '');
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app-container" data-testid="app-container">
+      <Toolbar />
+      <div className="main-content">
+        <Allotment>
+          <Allotment.Pane minSize={300}>
+            <EditorPane content={content} onChange={handleContentChange} />
+          </Allotment.Pane>
+          <Allotment.Pane minSize={300}>
+            <PdfPane />
+          </Allotment.Pane>
+        </Allotment>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      <StatusBar
+        buildStatus={buildStatus}
+        filePath="No file open"
+        line={cursorPosition.line}
+        column={cursorPosition.column}
+      />
+    </div>
   );
 }
 
