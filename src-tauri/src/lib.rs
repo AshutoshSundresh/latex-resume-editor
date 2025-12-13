@@ -1,3 +1,4 @@
+pub mod compiler;
 pub mod file_ops;
 pub mod workspace;
 
@@ -5,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
 
+use compiler::{compile_latex, is_tectonic_available, BuildResult};
 use file_ops::{get_file_name, read_file, write_file};
 use workspace::init_workspace;
 
@@ -75,6 +77,26 @@ fn file_get_current(state: State<AppState>) -> Option<String> {
     current.as_ref().map(|p| p.to_string_lossy().to_string())
 }
 
+/// Compile the current LaTeX file to PDF
+#[tauri::command]
+fn build_compile(state: State<AppState>) -> Result<BuildResult, String> {
+    let current = state.current_file.lock().map_err(|e| e.to_string())?;
+    let tex_path = current.as_ref().ok_or("No file is currently open")?;
+
+    // Use the same directory as the tex file for output
+    let output_dir = tex_path
+        .parent()
+        .ok_or("Cannot determine output directory")?;
+
+    Ok(compile_latex(tex_path, output_dir))
+}
+
+/// Check if tectonic compiler is available
+#[tauri::command]
+fn build_check_tectonic() -> bool {
+    is_tectonic_available()
+}
+
 /// File information returned from file operations
 #[derive(serde::Serialize)]
 pub struct FileInfo {
@@ -96,7 +118,9 @@ pub fn run() {
             file_open,
             file_save,
             file_save_as,
-            file_get_current
+            file_get_current,
+            build_compile,
+            build_check_tectonic
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
