@@ -6,6 +6,8 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
 
+use crate::diagnostics::{parse_diagnostics, Diagnostic};
+
 /// Result of a compilation attempt
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BuildResult {
@@ -14,6 +16,7 @@ pub struct BuildResult {
     pub log: String,
     pub duration_ms: u64,
     pub error_message: Option<String>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 /// Compile a LaTeX file to PDF using tectonic
@@ -35,6 +38,7 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
             log: String::new(),
             duration_ms: start.elapsed().as_millis() as u64,
             error_message: Some(format!("Failed to create output directory: {}", e)),
+            diagnostics: vec![],
         };
     }
 
@@ -55,6 +59,9 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             let log = format!("{}\n{}", stdout, stderr);
 
+            // Parse diagnostics from output
+            let diagnostics = parse_diagnostics(&log);
+
             if output.status.success() {
                 // Derive PDF path from tex path
                 let pdf_name = tex_path
@@ -71,6 +78,7 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
                         log,
                         duration_ms,
                         error_message: None,
+                        diagnostics,
                     }
                 } else {
                     BuildResult {
@@ -79,6 +87,7 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
                         log,
                         duration_ms,
                         error_message: Some("PDF file was not created".to_string()),
+                        diagnostics,
                     }
                 }
             } else {
@@ -88,6 +97,7 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
                     log,
                     duration_ms,
                     error_message: Some("Compilation failed".to_string()),
+                    diagnostics,
                 }
             }
         }
@@ -97,6 +107,7 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
             log: String::new(),
             duration_ms,
             error_message: Some(format!("Failed to run tectonic: {}", e)),
+            diagnostics: vec![],
         },
     }
 }
@@ -126,6 +137,7 @@ mod tests {
             log: "Build log".to_string(),
             duration_ms: 1500,
             error_message: None,
+            diagnostics: vec![],
         };
 
         let json = serde_json::to_string(&result).unwrap();
@@ -133,6 +145,7 @@ mod tests {
         assert!(json.contains("\"pdf_path\":\"/path/to/output.pdf\""));
         assert!(json.contains("\"duration_ms\":1500"));
         assert!(json.contains("\"error_message\":null"));
+        assert!(json.contains("\"diagnostics\":[]"));
     }
 
     #[test]
@@ -143,6 +156,7 @@ mod tests {
             log: "Error occurred".to_string(),
             duration_ms: 50,
             error_message: Some("Compilation failed".to_string()),
+            diagnostics: vec![],
         };
 
         let json = serde_json::to_string(&result).unwrap();
@@ -227,6 +241,7 @@ mod tests {
             log: "Error log".to_string(),
             duration_ms: 100,
             error_message: Some("Test error".to_string()),
+            diagnostics: vec![],
         };
 
         assert!(!result.success);
@@ -243,6 +258,7 @@ mod tests {
             log: "Compilation successful".to_string(),
             duration_ms: 2500,
             error_message: None,
+            diagnostics: vec![],
         };
 
         assert!(result.success);
@@ -258,6 +274,7 @@ mod tests {
             log: "Log".to_string(),
             duration_ms: 100,
             error_message: None,
+            diagnostics: vec![],
         };
 
         let cloned = result.clone();
@@ -274,6 +291,7 @@ mod tests {
             log: "test".to_string(),
             duration_ms: 50,
             error_message: None,
+            diagnostics: vec![],
         };
 
         let debug_str = format!("{:?}", result);

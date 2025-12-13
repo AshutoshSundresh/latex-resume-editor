@@ -1,14 +1,22 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Allotment } from 'allotment';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import 'allotment/dist/style.css';
 import './styles/theme.css';
 import './App.css';
 import { Toolbar } from './components/Toolbar';
-import { EditorPane } from './components/EditorPane';
+import { EditorPane, EditorPaneRef } from './components/EditorPane';
 import { PdfPane } from './components/PdfPane';
 import { StatusBar, BuildStatus } from './components/StatusBar';
-import { openFile, saveFile, saveFileAs, initWorkspace, compileLatex } from './tauri/api';
+import { DiagnosticsPanel } from './components/DiagnosticsPanel';
+import {
+  openFile,
+  saveFile,
+  saveFileAs,
+  initWorkspace,
+  compileLatex,
+  Diagnostic,
+} from './tauri/api';
 import { useAutosave } from './hooks/useAutosave';
 
 function App() {
@@ -21,7 +29,10 @@ function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [autosaveEnabled] = useState(true);
   const [pdfUrl, setPdfUrl] = useState<string | undefined>(undefined);
-  const [buildLog, setBuildLog] = useState<string>('');
+  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  const editorRef = useRef<EditorPaneRef | null>(null);
 
   // Initialize workspace on mount
   useEffect(() => {
@@ -65,9 +76,11 @@ function App() {
         setOriginalContent(fileInfo.content);
         setFilePath(fileInfo.path);
         setFileName(fileInfo.name);
-        // Clear PDF when opening new file
+        // Clear PDF and diagnostics when opening new file
         setPdfUrl(undefined);
         setBuildStatus('idle');
+        setDiagnostics([]);
+        setShowDiagnostics(false);
       }
     } catch (error) {
       console.error('Failed to open file:', error);
@@ -113,11 +126,17 @@ function App() {
       setOriginalContent(content);
 
       setBuildStatus('building');
-      setBuildLog('');
+      setDiagnostics([]);
 
       const result = await compileLatex();
 
-      setBuildLog(result.log);
+      // Store diagnostics
+      setDiagnostics(result.diagnostics);
+
+      // Show diagnostics panel if there are any issues
+      if (result.diagnostics.length > 0) {
+        setShowDiagnostics(true);
+      }
 
       if (result.success && result.pdf_path) {
         setBuildStatus('success');
@@ -134,11 +153,16 @@ function App() {
     }
   }, [filePath, content]);
 
+  const handleDiagnosticClick = useCallback((diagnostic: Diagnostic) => {
+    if (diagnostic.line && editorRef.current) {
+      editorRef.current.jumpToLine(diagnostic.line);
+    }
+  }, []);
+
   const handleSettings = useCallback(() => {
-    // TODO: Implement settings
-    console.log('Settings clicked');
-    console.log('Build log:', buildLog);
-  }, [buildLog]);
+    // Toggle diagnostics panel for now
+    setShowDiagnostics((prev) => !prev);
+  }, []);
 
   const displayFileName = isDirty ? `${fileName} •` : fileName;
 
@@ -154,11 +178,24 @@ function App() {
       <div className="main-content">
         <Allotment>
           <Allotment.Pane minSize={300}>
-            <EditorPane
-              content={content}
-              onChange={handleContentChange}
-              onCursorChange={handleCursorChange}
-            />
+            <Allotment vertical>
+              <Allotment.Pane minSize={200}>
+                <EditorPane
+                  ref={editorRef}
+                  content={content}
+                  onChange={handleContentChange}
+                  onCursorChange={handleCursorChange}
+                />
+              </Allotment.Pane>
+              {showDiagnostics && (
+                <Allotment.Pane minSize={100} preferredSize={150}>
+                  <DiagnosticsPanel
+                    diagnostics={diagnostics}
+                    onDiagnosticClick={handleDiagnosticClick}
+                  />
+                </Allotment.Pane>
+              )}
+            </Allotment>
           </Allotment.Pane>
           <Allotment.Pane minSize={300}>
             <PdfPane pdfUrl={pdfUrl} />
