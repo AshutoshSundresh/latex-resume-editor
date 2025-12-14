@@ -1,11 +1,11 @@
-//! LaTeX compilation using pdflatex
-//!
-//! This module handles compiling .tex files to PDF using pdflatex (TeX Live/MiKTeX).
+//! LaTeX compilation logic
 
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
 use tokio::process::Command as AsyncCommand;
+
+use super::pdflatex;
 
 /// Result of a compilation attempt
 #[derive(Debug, Clone, serde::Serialize)]
@@ -15,133 +15,6 @@ pub struct BuildResult {
     pub log: String,
     pub duration_ms: u64,
     pub error_message: Option<String>,
-}
-
-/// Get the pdflatex command - tries PATH first, then common locations
-fn get_pdflatex_command() -> String {
-    // Try PATH first
-    if Command::new("pdflatex")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        return "pdflatex".to_string();
-    }
-
-    // Try common MiKTeX locations on Windows
-    #[cfg(windows)]
-    {
-        let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string());
-        let miktex_paths = [
-            format!(
-                "{}\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64\\pdflatex.exe",
-                home
-            ),
-            "C:\\Program Files\\MiKTeX\\miktex\\bin\\x64\\pdflatex.exe".to_string(),
-            "C:\\Program Files (x86)\\MiKTeX\\miktex\\bin\\x64\\pdflatex.exe".to_string(),
-            "C:\\MiKTeX\\miktex\\bin\\x64\\pdflatex.exe".to_string(),
-        ];
-
-        for path in &miktex_paths {
-            if std::path::Path::new(path).exists() {
-                // Verify it actually works
-                if Command::new(path)
-                    .arg("--version")
-                    .output()
-                    .map(|o| o.status.success())
-                    .unwrap_or(false)
-                {
-                    return path.clone();
-                }
-                // Even if --version fails, if file exists, try to use it
-                return path.clone();
-            }
-        }
-    }
-
-    // Fallback to just "pdflatex"
-    "pdflatex".to_string()
-}
-
-/// Check if pdflatex is available on the system
-pub fn is_pdflatex_available() -> bool {
-    let cmd = get_pdflatex_command();
-    // If it's a full path, just check if file exists
-    if cmd.contains('\\') || cmd.contains('/') {
-        return std::path::Path::new(&cmd).exists();
-    }
-    // If it's just "pdflatex", try to run it
-    Command::new(&cmd)
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// Get system requirements status
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct RequirementsStatus {
-    pub pdflatex_available: bool,
-    pub pdflatex_path: Option<String>,
-    pub all_satisfied: bool,
-}
-
-/// Check all requirements
-pub fn check_requirements() -> RequirementsStatus {
-    let pdflatex_cmd = get_pdflatex_command();
-    
-    // Check if available - if it's a path, just check existence
-    let pdflatex_available = if pdflatex_cmd.contains('\\') || pdflatex_cmd.contains('/') {
-        std::path::Path::new(&pdflatex_cmd).exists()
-    } else {
-        Command::new(&pdflatex_cmd)
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    };
-
-    // Get the path we're using
-    let pdflatex_path = if pdflatex_available {
-        if pdflatex_cmd == "pdflatex" {
-            // It's in PATH, try to find the actual path
-            #[cfg(windows)]
-            {
-                Command::new("where")
-                    .arg("pdflatex")
-                    .output()
-                    .ok()
-                    .and_then(|o| {
-                        String::from_utf8(o.stdout)
-                            .ok()
-                            .map(|s| s.lines().next().unwrap_or("").trim().to_string())
-                    })
-                    .filter(|s| !s.is_empty())
-            }
-            #[cfg(not(windows))]
-            {
-                Command::new("which")
-                    .arg("pdflatex")
-                    .output()
-                    .ok()
-                    .and_then(|o| String::from_utf8(o.stdout).ok())
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-            }
-        } else {
-            // We're using a direct path
-            Some(pdflatex_cmd)
-        }
-    } else {
-        None
-    };
-
-    RequirementsStatus {
-        pdflatex_available,
-        pdflatex_path,
-        all_satisfied: pdflatex_available,
-    }
 }
 
 /// Get the temp build directory for compilation artifacts
@@ -171,7 +44,7 @@ pub async fn compile_latex_async(tex_path: &Path, _output_dir: &Path) -> BuildRe
     }
 
     // Run pdflatex asynchronously
-    let pdflatex_cmd = get_pdflatex_command();
+    let pdflatex_cmd = pdflatex::get_pdflatex_command();
     
     // Build command with proper environment
     let mut cmd = AsyncCommand::new(&pdflatex_cmd);
@@ -271,7 +144,7 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
         };
     }
 
-    let pdflatex_cmd = get_pdflatex_command();
+    let pdflatex_cmd = pdflatex::get_pdflatex_command();
     let mut cmd = Command::new(&pdflatex_cmd);
     cmd.arg("-interaction=nonstopmode")
         .arg(format!(
@@ -337,6 +210,7 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compiler::pdflatex;
     use std::fs;
     use std::io::Write;
     use tempfile::TempDir;
@@ -408,96 +282,6 @@ mod tests {
         assert!(debug_str.contains("success: true"));
     }
 
-    // ============ RequirementsStatus tests ============
-
-    #[test]
-    fn test_requirements_status_serializes_satisfied() {
-        let status = RequirementsStatus {
-            pdflatex_available: true,
-            pdflatex_path: Some("/usr/bin/pdflatex".to_string()),
-            all_satisfied: true,
-        };
-
-        let json = serde_json::to_string(&status).unwrap();
-        assert!(json.contains("\"pdflatex_available\":true"));
-        assert!(json.contains("\"all_satisfied\":true"));
-        assert!(json.contains("\"/usr/bin/pdflatex\""));
-    }
-
-    #[test]
-    fn test_requirements_status_serializes_unsatisfied() {
-        let status = RequirementsStatus {
-            pdflatex_available: false,
-            pdflatex_path: None,
-            all_satisfied: false,
-        };
-
-        let json = serde_json::to_string(&status).unwrap();
-        assert!(json.contains("\"pdflatex_available\":false"));
-        assert!(json.contains("\"all_satisfied\":false"));
-        assert!(json.contains("\"pdflatex_path\":null"));
-    }
-
-    #[test]
-    fn test_requirements_status_clone() {
-        let status = RequirementsStatus {
-            pdflatex_available: true,
-            pdflatex_path: Some("/path".to_string()),
-            all_satisfied: true,
-        };
-
-        let cloned = status.clone();
-        assert_eq!(status.pdflatex_available, cloned.pdflatex_available);
-        assert_eq!(status.pdflatex_path, cloned.pdflatex_path);
-        assert_eq!(status.all_satisfied, cloned.all_satisfied);
-    }
-
-    #[test]
-    fn test_requirements_status_debug() {
-        let status = RequirementsStatus {
-            pdflatex_available: false,
-            pdflatex_path: None,
-            all_satisfied: false,
-        };
-
-        let debug_str = format!("{:?}", status);
-        assert!(debug_str.contains("RequirementsStatus"));
-        assert!(debug_str.contains("pdflatex_available: false"));
-    }
-
-    // ============ Function tests ============
-
-    #[test]
-    fn test_check_requirements_returns_status() {
-        let status = check_requirements();
-        // all_satisfied should match pdflatex_available
-        assert_eq!(status.all_satisfied, status.pdflatex_available);
-    }
-
-    #[test]
-    fn test_check_requirements_path_consistency() {
-        let status = check_requirements();
-        // If pdflatex is available, path should be Some; otherwise None
-        if status.pdflatex_available {
-            assert!(status.pdflatex_path.is_some());
-        }
-    }
-
-    #[test]
-    fn test_is_pdflatex_available_returns_bool() {
-        let available = is_pdflatex_available();
-        // Just verify it returns a boolean without panicking
-        assert!(available || !available);
-    }
-
-    #[test]
-    fn test_is_pdflatex_available_consistency() {
-        // Multiple calls should return the same result
-        let first = is_pdflatex_available();
-        let second = is_pdflatex_available();
-        assert_eq!(first, second);
-    }
-
     // ============ compile_latex tests ============
 
     #[test]
@@ -557,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_compile_latex_success_if_pdflatex_available() {
-        if !is_pdflatex_available() {
+        if !pdflatex::is_pdflatex_available() {
             return;
         }
 
@@ -589,7 +373,7 @@ Hello, World!
 
     #[test]
     fn test_pdf_path_derives_from_tex_name() {
-        if !is_pdflatex_available() {
+        if !pdflatex::is_pdflatex_available() {
             return;
         }
 
@@ -612,3 +396,4 @@ Test
         }
     }
 }
+

@@ -270,7 +270,7 @@ function App() {
     };
   }, [handleSave, handleOpen, handleCompile]);
 
-  const displayFileName = isDirty ? `${fileName} •` : fileName;
+  const displayFileName = isDirty ? `${fileName} (not saved)` : fileName;
 
   // Show loading state while checking requirements
   if (checkingRequirements) {
