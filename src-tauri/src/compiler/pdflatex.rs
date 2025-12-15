@@ -65,6 +65,7 @@ pub fn is_pdflatex_available() -> bool {
 }
 
 /// Get debug information about pdflatex paths
+#[cfg(windows)]
 pub fn debug_pdflatex() -> String {
     let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "NOT_FOUND".to_string());
     let path1 = format!(
@@ -77,6 +78,44 @@ pub fn debug_pdflatex() -> String {
         "USERPROFILE: {}\nPath: {}\nExists: {}",
         home, path1, exists1
     )
+}
+
+/// Get debug information about pdflatex paths
+#[cfg(not(windows))]
+pub fn debug_pdflatex() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "NOT_FOUND".to_string());
+    let common_paths = [
+        "/usr/bin/pdflatex",
+        "/usr/local/bin/pdflatex",
+        "/opt/texbin/pdflatex",
+        format!("{}/.texlive/bin/x86_64-linux/pdflatex", home),
+        format!("{}/.texlive/bin/universal-darwin/pdflatex", home),
+    ];
+    
+    let mut info = format!("HOME: {}\n", home);
+    info.push_str("Common paths:\n");
+    
+    for path in &common_paths {
+        let exists = std::path::Path::new(path).exists();
+        info.push_str(&format!("  {}: {}\n", path, if exists { "EXISTS" } else { "not found" }));
+    }
+    
+    // Check if pdflatex is in PATH
+    let in_path = Command::new("which")
+        .arg("pdflatex")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    
+    if let Some(path) = in_path {
+        info.push_str(&format!("\npdflatex found in PATH: {}", path));
+    } else {
+        info.push_str("\npdflatex not found in PATH");
+    }
+    
+    info
 }
 
 #[cfg(test)]
@@ -110,7 +149,11 @@ mod tests {
         let debug = debug_pdflatex();
         // Should return a non-empty debug string
         assert!(!debug.is_empty());
+        // Check for platform-specific environment variable
+        #[cfg(windows)]
         assert!(debug.contains("USERPROFILE"));
+        #[cfg(not(windows))]
+        assert!(debug.contains("HOME"));
     }
 }
 
