@@ -25,6 +25,123 @@ fn get_build_dir() -> std::path::PathBuf {
     base.join("ResumeIDE").join("build")
 }
 
+/// Setup command arguments and environment for pdflatex
+fn setup_pdflatex_command_args(cmd: &mut Command, pdflatex_cmd: &str, output_dir: &Path, tex_path: &Path) {
+    cmd.arg("-interaction=nonstopmode")
+        .arg(format!("-output-directory={}", output_dir.to_string_lossy()))
+        .arg(tex_path);
+    
+    // If using full path, add parent directory to PATH for DLLs
+    if pdflatex_cmd.contains('\\') || pdflatex_cmd.contains('/') {
+        if let Some(parent) = std::path::Path::new(pdflatex_cmd).parent() {
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            let new_path = format!("{};{}", parent.to_string_lossy(), current_path);
+            cmd.env("PATH", new_path);
+        }
+    }
+}
+
+/// Setup command arguments and environment for pdflatex (async version)
+fn setup_pdflatex_command_args_async(cmd: &mut AsyncCommand, pdflatex_cmd: &str, output_dir: &Path, tex_path: &Path) {
+    cmd.arg("-interaction=nonstopmode")
+        .arg(format!("-output-directory={}", output_dir.to_string_lossy()))
+        .arg(tex_path);
+    
+    // If using full path, add parent directory to PATH for DLLs
+    if pdflatex_cmd.contains('\\') || pdflatex_cmd.contains('/') {
+        if let Some(parent) = std::path::Path::new(pdflatex_cmd).parent() {
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            let new_path = format!("{};{}", parent.to_string_lossy(), current_path);
+            cmd.env("PATH", new_path);
+        }
+    }
+}
+
+/// Process compilation output and build the result
+fn process_compilation_result(
+    result: Result<std::process::Output, std::io::Error>,
+    tex_path: &Path,
+    build_dir: &Path,
+    output_dir: &Path,
+    duration_ms: u64,
+    copy_to_source: bool,
+) -> BuildResult {
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let log = format!("{}\n{}", stdout, stderr);
+
+            // Derive PDF path from tex path
+            let pdf_name = tex_path
+                .file_stem()
+                .map(|s| format!("{}.pdf", s.to_string_lossy()))
+                .unwrap_or_else(|| "output.pdf".to_string());
+
+            let built_pdf = build_dir.join(&pdf_name);
+
+            // pdflatex may return non-zero but still produce a PDF
+            if built_pdf.exists() {
+                let final_pdf = if copy_to_source {
+                    // Copy PDF to same directory as source file
+                    tex_path
+                        .parent()
+                        .map(|p| p.join(&pdf_name))
+                        .unwrap_or_else(|| std::path::PathBuf::from(&pdf_name))
+                } else {
+                    // Use output directory directly
+                    output_dir.join(&pdf_name)
+                };
+
+                if copy_to_source {
+                    if let Err(e) = std::fs::copy(&built_pdf, &final_pdf) {
+                        return BuildResult {
+                            success: false,
+                            pdf_path: None,
+                            log,
+                            duration_ms,
+                            error_message: Some(format!("Failed to copy PDF: {}", e)),
+                        };
+                    }
+                }
+
+                BuildResult {
+                    success: true,
+                    pdf_path: Some(final_pdf.to_string_lossy().to_string()),
+                    log,
+                    duration_ms,
+                    error_message: None,
+                }
+            } else {
+                BuildResult {
+                    success: false,
+                    pdf_path: None,
+                    log,
+                    duration_ms,
+                    error_message: Some("Compilation failed - no PDF generated".to_string()),
+                }
+            }
+        }
+        Err(e) => {
+            let error_msg = if copy_to_source {
+                format!(
+                    "Failed to run pdflatex: {}. Make sure TeX Live or MiKTeX is installed.",
+                    e
+                )
+            } else {
+                format!("Failed to run pdflatex: {}", e)
+            };
+            BuildResult {
+                success: false,
+                pdf_path: None,
+                log: String::new(),
+                duration_ms,
+                error_message: Some(error_msg),
+            }
+        }
+    }
+}
+
 /// Compile a LaTeX file to PDF using pdflatex (async version)
 pub async fn compile_latex_async(tex_path: &Path, _output_dir: &Path) -> BuildResult {
     let start = Instant::now();
@@ -45,88 +162,20 @@ pub async fn compile_latex_async(tex_path: &Path, _output_dir: &Path) -> BuildRe
 
     // Run pdflatex asynchronously
     let pdflatex_cmd = pdflatex::get_pdflatex_command();
-    
-    // Build command with proper environment
     let mut cmd = AsyncCommand::new(&pdflatex_cmd);
-    cmd.arg("-interaction=nonstopmode")
-        .arg(format!(
-            "-output-directory={}",
-            build_dir.to_string_lossy()
-        ))
-        .arg(tex_path);
-    
-    // If using full path, add parent directory to PATH for DLLs
-    if pdflatex_cmd.contains('\\') || pdflatex_cmd.contains('/') {
-        if let Some(parent) = std::path::Path::new(&pdflatex_cmd).parent() {
-            let current_path = std::env::var("PATH").unwrap_or_default();
-            let new_path = format!("{};{}", parent.to_string_lossy(), current_path);
-            cmd.env("PATH", new_path);
-        }
-    }
+    setup_pdflatex_command_args_async(&mut cmd, &pdflatex_cmd, &build_dir, tex_path);
     
     let result = cmd.output().await;
-
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let log = format!("{}\n{}", stdout, stderr);
-
-            // Derive PDF path from tex path
-            let pdf_name = tex_path
-                .file_stem()
-                .map(|s| format!("{}.pdf", s.to_string_lossy()))
-                .unwrap_or_else(|| "output.pdf".to_string());
-
-            let built_pdf = build_dir.join(&pdf_name);
-
-            // pdflatex may return non-zero but still produce a PDF
-            if built_pdf.exists() {
-                // Copy PDF to same directory as source file
-                let final_pdf = tex_path.parent()
-                    .map(|p| p.join(&pdf_name))
-                    .unwrap_or_else(|| std::path::PathBuf::from(&pdf_name));
-                
-                if let Err(e) = std::fs::copy(&built_pdf, &final_pdf) {
-                    return BuildResult {
-                        success: false,
-                        pdf_path: None,
-                        log,
-                        duration_ms,
-                        error_message: Some(format!("Failed to copy PDF: {}", e)),
-                    };
-                }
-
-                BuildResult {
-                    success: true,
-                    pdf_path: Some(final_pdf.to_string_lossy().to_string()),
-                    log,
-                    duration_ms,
-                    error_message: None,
-                }
-            } else {
-                BuildResult {
-                    success: false,
-                    pdf_path: None,
-                    log,
-                    duration_ms,
-                    error_message: Some("Compilation failed - no PDF generated".to_string()),
-                }
-            }
-        }
-        Err(e) => BuildResult {
-            success: false,
-            pdf_path: None,
-            log: String::new(),
-            duration_ms,
-            error_message: Some(format!(
-                "Failed to run pdflatex: {}. Make sure TeX Live or MiKTeX is installed.",
-                e
-            )),
-        },
-    }
+    process_compilation_result(
+        result.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())),
+        tex_path,
+        &build_dir,
+        _output_dir,
+        duration_ms,
+        true, // Copy to source directory
+    )
 }
 
 /// Compile a LaTeX file to PDF using pdflatex (sync version for tests)
@@ -146,65 +195,19 @@ pub fn compile_latex(tex_path: &Path, output_dir: &Path) -> BuildResult {
 
     let pdflatex_cmd = pdflatex::get_pdflatex_command();
     let mut cmd = Command::new(&pdflatex_cmd);
-    cmd.arg("-interaction=nonstopmode")
-        .arg(format!(
-            "-output-directory={}",
-            output_dir.to_string_lossy()
-        ))
-        .arg(tex_path);
-    
-    // If using full path, add parent directory to PATH for DLLs
-    if pdflatex_cmd.contains('\\') || pdflatex_cmd.contains('/') {
-        if let Some(parent) = std::path::Path::new(&pdflatex_cmd).parent() {
-            let current_path = std::env::var("PATH").unwrap_or_default();
-            let new_path = format!("{};{}", parent.to_string_lossy(), current_path);
-            cmd.env("PATH", new_path);
-        }
-    }
+    setup_pdflatex_command_args(&mut cmd, &pdflatex_cmd, output_dir, tex_path);
     
     let result = cmd.output();
-
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let log = format!("{}\n{}", stdout, stderr);
-
-            let pdf_name = tex_path
-                .file_stem()
-                .map(|s| format!("{}.pdf", s.to_string_lossy()))
-                .unwrap_or_else(|| "output.pdf".to_string());
-
-            let pdf_path = output_dir.join(&pdf_name);
-
-            if pdf_path.exists() {
-                BuildResult {
-                    success: true,
-                    pdf_path: Some(pdf_path.to_string_lossy().to_string()),
-                    log,
-                    duration_ms,
-                    error_message: None,
-                }
-            } else {
-                BuildResult {
-                    success: false,
-                    pdf_path: None,
-                    log,
-                    duration_ms,
-                    error_message: Some("Compilation failed - no PDF generated".to_string()),
-                }
-            }
-        }
-        Err(e) => BuildResult {
-            success: false,
-            pdf_path: None,
-            log: String::new(),
-            duration_ms,
-            error_message: Some(format!("Failed to run pdflatex: {}", e)),
-        },
-    }
+    process_compilation_result(
+        result,
+        tex_path,
+        output_dir, // For sync version, build_dir == output_dir
+        output_dir,
+        duration_ms,
+        false, // Don't copy, use output_dir directly
+    )
 }
 
 #[cfg(test)]
