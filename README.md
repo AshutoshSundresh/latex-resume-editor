@@ -10,6 +10,12 @@ Desktop LaTeX resume editor with live PDF preview, built with Tauri, React, and 
 - Keyboard shortcuts (Ctrl+S/O/B) and unsaved changes warnings
 - Built primarily for Windows
 
+## Screenshots
+
+<img width="2879" height="1695" alt="image" src="https://github.com/user-attachments/assets/1434937c-5846-462b-97b5-1e99bac6fdfa" />
+
+<img width="2879" height="1701" alt="image" src="https://github.com/user-attachments/assets/6a2a4977-1c2c-444e-8781-88bee9eb1eb6" />
+
 ## Architecture
 
 - **Frontend**: React 19 + TypeScript with Monaco Editor and split-pane layout
