@@ -45,6 +45,38 @@ pub fn get_pdflatex_command() -> String {
         }
     }
 
+    // Try common locations on macOS/Linux (bundled apps often have minimal PATH)
+    #[cfg(not(windows))]
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let texlive_linux = format!("{}/.texlive/bin/x86_64-linux/pdflatex", home);
+        let texlive_darwin = format!("{}/.texlive/bin/universal-darwin/pdflatex", home);
+
+        let common_paths: Vec<&str> = vec![
+            "/usr/bin/pdflatex",
+            "/usr/local/bin/pdflatex",
+            "/opt/texbin/pdflatex",
+            "/Library/TeX/texbin/pdflatex",
+            &texlive_linux,
+            &texlive_darwin,
+        ];
+
+        for path in common_paths {
+            if std::path::Path::new(path).exists() {
+                if Command::new(path)
+                    .arg("--version")
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+                {
+                    return path.to_string();
+                }
+                // Even if --version fails, if file exists, try to use it
+                return path.to_string();
+            }
+        }
+    }
+
     // Fallback to just "pdflatex"
     "pdflatex".to_string()
 }
@@ -84,12 +116,15 @@ pub fn debug_pdflatex() -> String {
 #[cfg(not(windows))]
 pub fn debug_pdflatex() -> String {
     let home = std::env::var("HOME").unwrap_or_else(|_| "NOT_FOUND".to_string());
+    let texlive_linux = format!("{}/.texlive/bin/x86_64-linux/pdflatex", home);
+    let texlive_darwin = format!("{}/.texlive/bin/universal-darwin/pdflatex", home);
     let common_paths = [
         "/usr/bin/pdflatex",
-        "/usr/local/bin/pdflatex",
+        "/usr/local/bin/pdflatex", 
         "/opt/texbin/pdflatex",
-        format!("{}/.texlive/bin/x86_64-linux/pdflatex", home),
-        format!("{}/.texlive/bin/universal-darwin/pdflatex", home),
+        "/Library/TeX/texbin/pdflatex",
+        &texlive_linux,
+        &texlive_darwin,
     ];
     
     let mut info = format!("HOME: {}\n", home);
