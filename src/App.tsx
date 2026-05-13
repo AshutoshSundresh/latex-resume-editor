@@ -15,6 +15,7 @@ import { LandingPage } from './components/LandingPage';
 import { StartupDialog } from './components/StartupDialog';
 import {
   openFile,
+  readFileByPath,
   saveFile,
   saveFileAs,
   initWorkspace,
@@ -107,6 +108,30 @@ function App() {
 
   const handleCursorChange = useCallback((line: number, column: number) => {
     setCursorPosition({ line, column });
+  }, []);
+
+  const handleNewFile = useCallback(async () => {
+    if (isDirtyRef.current) {
+      const shouldProceed = await ask(
+        'You have unsaved changes. Do you want to discard them and start a new file?',
+        {
+          title: 'Unsaved Changes',
+          kind: 'warning',
+          okLabel: 'Discard Changes',
+          cancelLabel: 'Cancel',
+        }
+      );
+      if (!shouldProceed) return;
+    }
+
+    setContent('');
+    setOriginalContent('');
+    setFilePath(null);
+    setFileName('No file open');
+    setPdfUrl(undefined);
+    setBuildStatus('idle');
+    setCompilerLog('');
+    toast.success('New file created');
   }, []);
 
   const handleOpen = useCallback(async () => {
@@ -244,9 +269,46 @@ function App() {
     setShowLog((prev) => !prev);
   }, []);
 
+  const handleRefresh = useCallback(async () => {
+    if (!filePath) {
+      toast.error('No file open to refresh');
+      return;
+    }
+
+    if (isDirtyRef.current) {
+      const shouldProceed = await ask(
+        'You have unsaved changes. Do you want to discard them and reload from disk?',
+        {
+          title: 'Discard Changes',
+          kind: 'warning',
+          okLabel: 'Discard & Reload',
+          cancelLabel: 'Cancel',
+        }
+      );
+
+      if (!shouldProceed) return;
+    }
+
+    try {
+      const fileInfo = await readFileByPath(filePath);
+      setContent(fileInfo.content);
+      setOriginalContent(fileInfo.content);
+      toast.success('File reloaded from disk');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to reload file';
+      toast.error(errorMessage);
+      console.error('Failed to reload file:', error);
+    }
+  }, [filePath]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+N or Cmd+N: New file
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        handleNewFile();
+      }
       // Ctrl+S or Cmd+S: Save
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -268,7 +330,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleSave, handleOpen, handleCompile]);
+  }, [handleNewFile, handleSave, handleOpen, handleCompile]);
 
   const displayFileName = isDirty ? `${fileName} (not saved)` : fileName;
 
@@ -303,12 +365,15 @@ function App() {
         />
       )}
       <Toolbar
+        onNew={handleNewFile}
         onOpen={handleOpen}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
         onCompile={handleCompile}
         onToggleLog={handleToggleLog}
+        onRefresh={handleRefresh}
         logVisible={showLog}
+        hasFile={!!filePath}
       />
       <div className="main-content">
         <Allotment>

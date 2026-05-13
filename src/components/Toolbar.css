@@ -60,6 +60,11 @@
   display: block;
 }
 
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .toolbar-spacer {
   flex: 1;
 }

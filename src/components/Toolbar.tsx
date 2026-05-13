@@ -3,27 +3,41 @@ import './Toolbar.css';
 import { HelpDialog } from './HelpDialog';
 
 interface ToolbarProps {
+  onNew?: () => void;
   onOpen?: () => void;
   onSave?: () => void;
   onSaveAs?: () => void;
   onCompile?: () => void;
   onToggleLog?: () => void;
+  onRefresh?: () => void;
   logVisible?: boolean;
+  hasFile?: boolean;
 }
 
 export function Toolbar({
+  onNew,
   onOpen,
   onSave,
   onSaveAs,
   onCompile,
   onToggleLog,
+  onRefresh,
   logVisible,
+  hasFile,
 }: ToolbarProps) {
   const [showHelp, setShowHelp] = useState(false);
 
   return (
     <div className="toolbar" data-testid="toolbar">
       <div className="toolbar-group">
+        <button
+          className="toolbar-btn"
+          title="New File (Ctrl+N)"
+          onClick={onNew}
+          data-testid="toolbar-new"
+        >
+          New
+        </button>
         <button
           className="toolbar-btn"
           title="Open File"
@@ -42,6 +56,17 @@ export function Toolbar({
           data-testid="toolbar-save-as"
         >
           Save As
+        </button>
+        <button
+          className="toolbar-btn toolbar-btn-icon"
+          title="Reload file from disk (discard unsaved changes)"
+          onClick={onRefresh}
+          disabled={!hasFile}
+          data-testid="toolbar-refresh"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M13.65 2.35A8 8 0 1 0 15 8h-1.5a6.5 6.5 0 1 1-1.12-3.65L10 6.5h4.5V2l-0.85.35z" />
+          </svg>
         </button>
       </div>
       <div className="toolbar-group">

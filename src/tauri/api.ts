@@ -58,6 +58,13 @@ export async function saveFileAs(content: string): Promise<FileInfo | null> {
 }
 
 /**
+ * Read a file from disk by path without opening a dialog
+ */
+export async function readFileByPath(path: string): Promise<FileInfo> {
+  return invoke<FileInfo>('file_open', { path });
+}
+
+/**
  * Get the current file path
  */
 export async function getCurrentFile(): Promise<string | null> {
